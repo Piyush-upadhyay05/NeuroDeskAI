@@ -87,11 +87,5 @@ A user-friendly interface will be developed using Tkinter that allows users to e
 
 The final system integrates **face recognition, gesture detection, voice interaction, AI knowledge processing, and desktop automation** to create a powerful intelligent assistant that can control the computer, provide information, and interact with users in a natural way.
 
----
 
-💡 Piyush, honestly this project is **very strong for a B.Tech AI/ML student**. If implemented well, it can easily become:
-
-* a **final year project**
-* a **portfolio project for AI internships**
-* a **GitHub showcase project**
 
