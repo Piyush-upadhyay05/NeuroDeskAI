@@ -71,3 +71,17 @@ def search_folder(name):
                 return True
 
     return False
+def type_text(text):
+    pyautogui.write(text, interval=0.05)
+
+def press_enter():
+    pyautogui.press("enter")
+
+def hotkey(k1, k2):
+    pyautogui.hotkey(k1, k2)
+
+def scroll_down():
+    pyautogui.scroll(-500)
+
+def scroll_up():
+    pyautogui.scroll(500)
