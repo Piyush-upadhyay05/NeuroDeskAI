@@ -1,25 +1,43 @@
-import os
-from dotenv import load_dotenv
-from openai import OpenAI
+import ollama
 
-# Load environment variables
-load_dotenv()
+def ask_ai(prompt):
+    """
+    Convert user voice into short actionable command
+    """
 
-# Get API key from .env
-API_KEY = os.getenv("API_KEY")
+    try:
+        response = ollama.chat(
+            model='phi3',
+            messages=[
+                {
+                    'role': 'system',
+                    'content': '''
+You are an AI assistant for desktop automation.
 
-# Initialize client
-client = OpenAI(api_key=API_KEY)
+Convert user commands into SHORT actionable commands like:
+- open chrome
+- open notepad
+- search google python
+- shutdown system
+- take screenshot
 
-def ask_ai(question):
+IMPORTANT RULES:
+- Only return command
+- No explanation
+- No extra words
+- Keep it short
+'''
+                },
+                {
+                    'role': 'user',
+                    'content': prompt
+                }
+            ]
+        )
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "user", "content": question}
-        ]
-    )
+        result = response['message']['content'].lower().strip()
+        return result
 
-    answer = response.choices[0].message.content
-
-    return answer[:500]
+    except Exception as e:
+        print("Ollama Error:", e)
+        return prompt  # fallback

@@ -1,226 +1,230 @@
+# ==========================================
+# FILE: Modules/voice_assistant.py
+# FINAL FIXED VERSION
+# Voice + Mic + Commands + AI Response
+# ==========================================
+
 import speech_recognition as sr
 import pyttsx3
-import sounddevice as sd
-import soundfile as sf
-import numpy as np
-from Modules.ai_brain import ask_ai
-from Modules import Automation
+import threading
 import time
 
+from Modules.ai_brain import ask_ai
+from Modules import Automation
+
+
+# ==========================================
+# GLOBAL
+# ==========================================
 current_app = None
 
-import pyttsx3
 
-engine = pyttsx3.init()
-engine.setProperty('rate', 170)
+# ==========================================
+# TEXT TO SPEECH (Windows)
+# ==========================================
+tts_lock = threading.Lock()
 
-voices = engine.getProperty('voices')
-engine.setProperty('voice', voices[0].id)
+engine = pyttsx3.init("sapi5")
+engine.setProperty("rate", 180)
+engine.setProperty("volume", 1.0)
 
-is_speaking = False
+voices = engine.getProperty("voices")
+if voices:
+    engine.setProperty("voice", voices[0].id)   # male voice
 
-
-# ------------------------
-# Speak Function (FINAL)
-# ------------------------
-from gtts import gTTS
-from pydub import AudioSegment
-import winsound
-import os
-import uuid
 
 def speak(text):
     print("Assistant:", text)
 
-    try:
-        mp3_file = f"voice_{uuid.uuid4().hex}.mp3"
-        wav_file = f"voice_{uuid.uuid4().hex}.wav"
+    with tts_lock:
+        try:
+            engine.stop()
+            engine.say(text)
+            engine.runAndWait()
+        except Exception as e:
+            print("Voice Error:", e)
 
-        # Generate MP3
-        tts = gTTS(text=text, lang='en')
-        tts.save(mp3_file)
 
-        # Convert MP3 → WAV
-        sound = AudioSegment.from_mp3(mp3_file)
-        sound.export(wav_file, format="wav")
-
-        # Play WAV silently (no popup)
-        winsound.PlaySound(wav_file, winsound.SND_FILENAME)
-
-        # Cleanup
-        os.remove(mp3_file)
-        os.remove(wav_file)
-
-    except Exception as e:
-        print("Voice Error:", e)
-# ------------------------
-# Listen Function (sounddevice version)
-# ------------------------
-import sounddevice as sd
-import speech_recognition as sr
-import numpy as np
-
+# ==========================================
+# LISTEN FUNCTION (MIC FIXED)
+# ==========================================
 def listen():
-    samplerate = 16000
-    duration = 5
+    recognizer = sr.Recognizer()
 
-    print("Listening...")
-
-    recording = sd.rec(
-        int(duration * samplerate),
-        samplerate=samplerate,
-        channels=1,
-        dtype="int16"
-    )
-    sd.wait()
-
-    # 🔥 Convert numpy array to bytes (NO FILE)
-    audio_bytes = recording.tobytes()
-
-    r = sr.Recognizer()
+    # Better sensitivity
+    recognizer.energy_threshold = 250
+    recognizer.dynamic_energy_threshold = True
+    recognizer.pause_threshold = 0.6
+    recognizer.non_speaking_duration = 0.3
 
     try:
-        audio = sr.AudioData(audio_bytes, samplerate, 2)
+        with sr.Microphone() as source:
 
-        command = r.recognize_google(audio)
+            print("Listening... Speak now")
+
+            # Fast noise adjustment
+            recognizer.adjust_for_ambient_noise(
+                source,
+                duration=0.2
+            )
+
+            audio = recognizer.listen(
+                source,
+                timeout=5,
+                phrase_time_limit=5
+            )
+
+        print("Recognizing...")
+
+        command = recognizer.recognize_google(
+            audio,
+            language="en-IN"
+        )
+
         print("You said:", command)
 
-        return command.lower()
+        return command.lower().strip()
 
-    except:
+    except sr.WaitTimeoutError:
         return ""
 
-# ------------------------
-# Command Handler
-# ------------------------
-import time
+    except sr.UnknownValueError:
+        return ""
 
+    except Exception as e:
+        print("Mic Error:", e)
+        return ""
+
+# ==========================================
+# COMMAND PROCESSOR
+# ==========================================
 def process_command(command):
-
     global current_app
 
-    if "open chrome" in command:
+    command = command.lower().strip()
+
+    # -------------------------------
+    # OPEN CHROME
+    # -------------------------------
+    if "chrome" in command:
         speak("Opening Chrome sir")
-        time.sleep(1)
         Automation.open_chrome()
         current_app = "chrome"
 
-    elif "open notepad" in command:
+    # -------------------------------
+    # OPEN NOTEPAD
+    # -------------------------------
+    elif "notepad" in command:
         speak("Opening Notepad sir")
-        time.sleep(1)
         Automation.open_notepad()
         current_app = "notepad"
 
-    elif "open calculator" in command:
+    # -------------------------------
+    # CALCULATOR
+    # -------------------------------
+    elif "calculator" in command or "calc" in command:
         speak("Opening Calculator sir")
-        time.sleep(1)
         Automation.open_calculator()
-        current_app = "calculator"
 
-    elif "go to desktop" in command:
-        speak("Showing desktop sir")
-        time.sleep(0.5)
-        Automation.show_desktop()
-
-    elif "switch window" in command:
-        speak("Switching window sir")
-        time.sleep(0.5)
-        Automation.switch_window()
-
-    elif "close window" in command:
-        speak("Closing the window sir")
-        time.sleep(0.5)
-        Automation.close_window()
-
-    elif "take screenshot" in command:
+    # -------------------------------
+    # SCREENSHOT
+    # -------------------------------
+    elif "screenshot" in command:
         speak("Taking screenshot sir")
-        time.sleep(1)
-        file = Automation.take_screenshot()
+        Automation.take_screenshot()
         speak("Screenshot saved sir")
 
-    elif "open documents" in command:
-        speak("Opening documents folder sir")
-        time.sleep(1)
-        Automation.open_folder("documents")
-        current_app = "document"
+    # -------------------------------
+    # CLOSE WINDOW
+    # -------------------------------
+    elif "close window" in command:
+        speak("Closing current window sir")
+        Automation.close_window()
 
-    elif "open downloads" in command:
-        speak("Opening downloads folder sir")
-        time.sleep(1)
-        Automation.open_folder("downloads")
+    # -------------------------------
+    # SWITCH WINDOW
+    # -------------------------------
+    elif "switch window" in command:
+        speak("Switching window sir")
+        Automation.switch_window()
 
-    elif "open project folder" in command:
-        found = Automation.search_folder("project")
+    # -------------------------------
+    # SHOW DESKTOP
+    # -------------------------------
+    elif "desktop" in command:
+        speak("Showing desktop sir")
+        Automation.show_desktop()
 
-        if found:
-            speak("Opening folder sir")
-        else:
-            speak("Folder not found sir")
+    # -------------------------------
+    # SEARCH IN CHROME
+    # -------------------------------
+    elif current_app == "chrome" and "search" in command:
+        query = command.replace("search", "").strip()
 
+        if query:
+            speak("Searching sir")
+            Automation.type_text(query)
+            Automation.press_enter()
+
+    # -------------------------------
+    # WRITE IN NOTEPAD
+    # -------------------------------
+    elif current_app == "notepad" and "write" in command:
+        text = command.replace("write", "").strip()
+
+        if text:
+            speak("Writing sir")
+            Automation.type_text(text)
+
+    # -------------------------------
+    # EXIT
+    # -------------------------------
     elif "exit" in command:
         speak("Goodbye Piyush sir")
         return False
 
-    # -------------------
-    # CONTEXT CONTROL
-    # -------------------
-
-    elif current_app == "notepad":
-        
-        if "write" in command:
-            text = command.replace("write", "").strip()   # 🔥 FIXED
-            speak("Writing in notepad sir")
-            time.sleep(0.5)
-            Automation.type_text(text)
-
-        elif "new line" in command:
-            Automation.press_enter()
-
-        elif "save file" in command:
-            speak("Saving file sir")
-            time.sleep(0.5)
-            Automation.hotkey("ctrl", "s")
-
-    elif current_app == "chrome":
-
-        if "search" in command:
-            query = command.replace("search", "").strip()
-            speak("Searching on Google sir")
-            time.sleep(1)
-            Automation.type_text(query)
-            Automation.press_enter()
-
-        elif "scroll down" in command:
-            Automation.scroll_down()
-
-        elif "scroll up" in command:
-            Automation.scroll_up()
-
-    # -------------------
-
+    # -------------------------------
+    # AI MODE
+    # -------------------------------
     else:
         speak("Let me think sir")
-        answer = ask_ai(command)
-        speak(answer[:200])   # 🔥 limit long answers
+
+        try:
+            answer = ask_ai(command)
+
+            if answer:
+                speak(answer[:180])
+            else:
+                speak("I did not understand sir")
+
+        except Exception as e:
+            print("AI Error:", e)
+            speak("System is busy sir")
 
     return True
 
 
-# ------------------------
-# Main Loop
-# ------------------------
+# ==========================================
+# MAIN LOOP
+# ==========================================
 def run_assistant():
-
-    speak("Hello Piyush sir, NeuroDesk AI is ready for your command.")
+    speak("Hello Piyush sir. NeuroDesk AI is ready for your command.")
 
     running = True
 
     while running:
+
         command = listen()
 
         if command:
+            print("Processing:", command)
             running = process_command(command)
 
-        time.sleep(0.3)
+        time.sleep(0.2)
+
+
+# ==========================================
+# RUN DIRECTLY
+# ==========================================
 if __name__ == "__main__":
     run_assistant()
