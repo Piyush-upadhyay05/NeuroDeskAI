@@ -14,7 +14,15 @@ from Modules.wake_word import listen_for_wake_word
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QLabel, QPushButton, QTextEdit,
-    QVBoxLayout, QHBoxLayout
+    QVBoxLayout, QHBoxLayout,QInputDialog, QMessageBox
+)
+from Modules.security import (
+    set_password,
+    verify_password
+)
+from Modules.face_lock import (
+    enroll_face,
+    verify_face
 )
 
 from PyQt6.QtCore import Qt, QTimer
@@ -40,7 +48,33 @@ class NeuroDeskUI(QMainWindow):
         self.mic_running = False
 
         self.setup_ui()
+    
+    def set_password_ui(self):
 
+     text, ok = QInputDialog.getText(
+        self,
+        "Set Password",
+        "Enter new password:"
+    )
+
+     if ok and text:
+        set_password(text)
+
+        QMessageBox.information(
+            self,
+            "Success",
+            "Password Saved!"
+        )
+    def set_face_ui(self):
+
+        speak(
+           "Look at the camera sir. Press S to save your face"
+          )
+
+        enroll_face()
+
+        self.add_log("Face Lock Saved")
+        
     # ======================================
     # UI
     # ======================================
@@ -66,6 +100,12 @@ class NeuroDeskUI(QMainWindow):
 
         self.enable_btn = QPushButton("🎤 Enable Mic")
         self.stop_btn = QPushButton("🛑 Stop Mic")
+        self.lock_btn = QPushButton("🔒 Set Password")
+        self.lock_btn.setMinimumHeight(50)
+        self.lock_btn.clicked.connect(self.set_password_ui)
+        self.face_btn = QPushButton("👤 Set Face Lock")
+        self.face_btn.setMinimumHeight(50)
+        self.face_btn.clicked.connect(self.set_face_ui)
 
         self.enable_btn.clicked.connect(
             self.start_mic
@@ -82,6 +122,8 @@ class NeuroDeskUI(QMainWindow):
         left.addSpacing(20)
         left.addWidget(self.enable_btn)
         left.addWidget(self.stop_btn)
+        left.addWidget(self.lock_btn)
+        left.addWidget(self.face_btn)
         left.addStretch()
 
         # Right Panel Logs
@@ -179,7 +221,7 @@ class NeuroDeskUI(QMainWindow):
         self.set_status("Idle")
 
     # ======================================
-    # WAKE WORD MODE
+    # WAKE WORD + PASSWORD MODE
     # ======================================
     def wake_mode(self):
 
@@ -191,32 +233,50 @@ class NeuroDeskUI(QMainWindow):
 
             if heard:
 
-                # UI safely main thread me open hoga
+                # Show UI first
                 QTimer.singleShot(0, self.showNormal)
                 QTimer.singleShot(0, self.raise_)
                 QTimer.singleShot(0, self.activateWindow)
 
                 QTimer.singleShot(
                     0,
-                    lambda: self.set_status("Awakened")
+                    lambda: self.set_status("Password Required")
                 )
 
-                speak("Yes sir")
+                # Keep asking password until correct
+                while True:
 
-                QTimer.singleShot(
-                    0,
-                    self.start_mic
-                )
+                    speak("Please say your password sir")
 
-                break
+                    password = listen().lower()
 
-    # ======================================
-    # CLOSE EVENT
-    # ======================================
-    def closeEvent(self, event):
+                    self.add_log(
+                        "Password Heard: " + password
+                    )
 
-        self.mic_running = False
-        event.accept()
+                    if verify_password(password):
+
+                        speak("Access granted sir")
+
+                        QTimer.singleShot(
+                            0,
+                            lambda: self.set_status("Unlocked")
+                        )
+
+                        QTimer.singleShot(
+                            0,
+                            self.start_mic
+                        )
+
+                        return
+
+                    else:
+
+                        speak(
+                            "Wrong password sir. Tell me the correct password"
+                        )
+
+                        self.add_log("Wrong Password")    
 
 
 # ==========================================
